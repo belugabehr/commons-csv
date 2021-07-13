@@ -113,7 +113,7 @@ final class Lexer implements Closeable {
     }
 
     /**
-     * Determine whether the next characters constitute a delimiter through {@link ExtendedBufferedReader#lookAhead(int)}
+     * Determine whether the next characters constitute a delimiter.
      *
      * @param ch
      *             the current character.
@@ -162,7 +162,7 @@ final class Lexer implements Closeable {
     }
 
     /**
-     * Tests if the next characters constitute a escape delimiter through {@link ExtendedBufferedReader#lookAhead(int)}.
+     * Tests if the next characters constitute a escape delimiter.
      *
      * For example, for delimiter "[|]" and escape '!', return true if the next characters constitute "![!|!]".
      *
@@ -177,6 +177,7 @@ final class Lexer implements Closeable {
 
         if (count < len) {
             if (count > 0) {
+                // incomplete read, put back what was read
                 reader.unread(buf, 0, count);
             }
           return false;

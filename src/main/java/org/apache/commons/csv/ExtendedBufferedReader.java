@@ -22,11 +22,11 @@ import static org.apache.commons.csv.Constants.END_OF_STREAM;
 import static org.apache.commons.csv.Constants.LF;
 import static org.apache.commons.csv.Constants.UNDEFINED;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PushbackReader;
 import java.io.Reader;
 import java.io.StringReader;
+import java.util.Arrays;
 
 /**
  * A special buffered reader which supports sophisticated read access.
@@ -119,7 +119,7 @@ final class ExtendedBufferedReader extends PushbackReader {
         return lastChar;
     }
 
-    public int peek() throws IOException {
+    int peek() throws IOException {
       final int current = super.read();
       if (current != END_OF_STREAM) {
           super.unread(current);
@@ -128,10 +128,10 @@ final class ExtendedBufferedReader extends PushbackReader {
     }
 
     char[] peek(int n) throws IOException {
-      final char[] buf = new char[n];
-      super.read(buf);
-      super.unread(buf);
-      return buf;
+        final char[] buf = new char[n];
+        int count = super.read(buf);
+        super.unread(buf, 0, count);
+        return (count == buf.length) ? buf : Arrays.copyOf(buf, count);
     }
 
     @Override
@@ -166,7 +166,7 @@ final class ExtendedBufferedReader extends PushbackReader {
     }
 
     /**
-     * Calls {@link BufferedReader#readLine()} which drops the line terminator(s). This method should only be called
+     * Read the next line of input, which drops the line terminator(s). This method should only be called
      * when processing a comment, otherwise information can be lost.
      * <p>
      * Increments {@link #eolCounter}.
@@ -182,21 +182,26 @@ final class ExtendedBufferedReader extends PushbackReader {
         final long startEolCounter = eolCounter;
 
         int c = this.read();
+
+        // First read was EOS
         if (c == END_OF_STREAM) {
           return null;
         }
+        // First read was EOL
         if (eolCounter != startEolCounter) {
           if (c == CR && peek() == LF) {
             this.read();
           }
           return "";
         }
+        // Read until new line is hit
         do {
           sb.append((char)c);
           c = this.read();
         }
         while (eolCounter == startEolCounter);
 
+        // If the line is terminated with CR+LF, trim the LF
         if (c == CR && peek() == LF) {
           this.read();
         }
@@ -207,7 +212,6 @@ final class ExtendedBufferedReader extends PushbackReader {
     static ExtendedBufferedReader create(Reader reader, int delimiterSize) {
         return new ExtendedBufferedReader(reader, delimiterSize);
     }
-
 
     static ExtendedBufferedReader create(String string, int delimiterSize) {
         return new ExtendedBufferedReader(new StringReader(string), delimiterSize);
