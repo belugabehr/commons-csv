@@ -431,7 +431,7 @@ public final class CSVParser implements Iterable<CSVRecord>, Closeable {
         Objects.requireNonNull(format, "format");
 
         this.format = format;
-        this.lexer = new Lexer(format, new ExtendedBufferedReader(reader));
+        this.lexer = new Lexer(format, reader);
         this.csvRecordIterator = new CSVRecordIterator();
         final Headers headers = createHeaders();
         this.headerMap = headers.headerMap;

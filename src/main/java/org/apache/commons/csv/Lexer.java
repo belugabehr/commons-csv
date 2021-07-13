@@ -32,6 +32,7 @@ import static org.apache.commons.csv.Token.Type.TOKEN;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.Reader;
 
 /**
  * Lexical analyzer.
@@ -60,14 +61,14 @@ final class Lexer implements Closeable {
     private final ExtendedBufferedReader reader;
     private String firstEol;
 
-    Lexer(final CSVFormat format, final ExtendedBufferedReader reader) {
-        this.reader = reader;
+    Lexer(final CSVFormat format, final Reader reader) {
         this.delimiter = format.getDelimiterString().toCharArray();
         this.escape = mapNullToDisabled(format.getEscapeCharacter());
         this.quoteChar = mapNullToDisabled(format.getQuoteCharacter());
         this.commentStart = mapNullToDisabled(format.getCommentMarker());
         this.ignoreSurroundingSpaces = format.getIgnoreSurroundingSpaces();
         this.ignoreEmptyLines = format.getIgnoreEmptyLines();
+        this.reader = new ExtendedBufferedReader(reader, this.delimiter.length);
     }
 
     /**
@@ -124,14 +125,22 @@ final class Lexer implements Closeable {
             return false;
         }
         final int len = delimiter.length - 1;
-        final char[] buf = reader.lookAhead(len);
+        final char[] buf = new char[len];
+        final int count = reader.read(buf);
+
+        if (count < len) {
+          reader.unread(buf, 0, count);
+          return false;
+        }
+
         for (int i = 0; i < len; i++) {
             if (buf[i] != delimiter[i+1]) {
+                reader.unread(buf);
                 return false;
             }
         }
-        final int count = reader.read(buf, 0, len);
-        return count != END_OF_STREAM;
+
+        return true;
     }
 
     /**
@@ -162,17 +171,30 @@ final class Lexer implements Closeable {
      */
     boolean isEscapeDelimiter() throws IOException {
         final int len = 2 * delimiter.length - 1;
-        final char[] buf = reader.lookAhead(len);
+        final char[] buf = new char[len];
+
+        final int count = reader.read(buf);
+
+        if (count < len) {
+            if (count > 0) {
+                reader.unread(buf, 0, count);
+            }
+          return false;
+        }
+
         if (buf[0] != delimiter[0]) {
+            reader.unread(buf);
             return false;
         }
+
         for (int i = 1; i < delimiter.length; i++) {
             if (buf[2 * i] != delimiter[i] || buf[2 * i - 1] != escape) {
+                reader.unread(buf);
                 return false;
             }
         }
-        final int count = reader.read(buf, 0, len);
-        return count != END_OF_STREAM;
+
+        return true;
     }
 
     private boolean isMetaChar(final int ch) {
@@ -343,7 +365,7 @@ final class Lexer implements Closeable {
                     }
                 }
             } else if (isQuoteChar(c)) {
-                if (isQuoteChar(reader.lookAhead())) {
+                if (isQuoteChar(reader.peek())) {
                     // double or escaped encapsulator -> add single encapsulator to token
                     c = reader.read();
                     token.content.append((char) c);
@@ -450,7 +472,7 @@ final class Lexer implements Closeable {
      */
     boolean readEndOfLine(int ch) throws IOException {
         // check if we have \r\n...
-        if (ch == CR && reader.lookAhead() == LF) {
+        if (ch == CR && reader.peek() == LF) {
             // note: does not change ch outside of this method!
             ch = reader.read();
             // Save the EOL state

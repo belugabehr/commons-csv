@@ -192,7 +192,7 @@ public class PerformanceTest {
             int fields = 0;
             int lines = 0;
             final long startMillis;
-            try (final ExtendedBufferedReader in = new ExtendedBufferedReader(createReader())) {
+            try (final ExtendedBufferedReader in = ExtendedBufferedReader.create(createReader(), 0)) {
                 startMillis = System.currentTimeMillis();
                 int read;
                 if (makeString) {
@@ -272,7 +272,7 @@ public class PerformanceTest {
             final String simpleName;
             final Stats stats;
             final long startMillis;
-            try (final ExtendedBufferedReader input = new ExtendedBufferedReader(createReader());
+            try (final ExtendedBufferedReader input = ExtendedBufferedReader.create(createReader(), 0);
                     final Lexer lexer = createTestCSVLexer(test, input)) {
                 if (test.startsWith("CSVLexer")) {
                     dynamic = "!";

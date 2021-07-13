@@ -24,7 +24,9 @@ import static org.apache.commons.csv.Constants.UNDEFINED;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.PushbackReader;
 import java.io.Reader;
+import java.io.StringReader;
 
 /**
  * A special buffered reader which supports sophisticated read access.
@@ -33,7 +35,7 @@ import java.io.Reader;
  * {@link #read()}. This reader also tracks how many characters have been read with {@link #getPosition()}.
  * </p>
  */
-final class ExtendedBufferedReader extends BufferedReader {
+final class ExtendedBufferedReader extends PushbackReader {
 
     /** The last char returned */
     private int lastChar = UNDEFINED;
@@ -49,8 +51,8 @@ final class ExtendedBufferedReader extends BufferedReader {
     /**
      * Created extended buffered reader using default buffer-size
      */
-    ExtendedBufferedReader(final Reader reader) {
-        super(reader);
+    ExtendedBufferedReader(final Reader reader, final int delimiterSize) {
+        super(reader, Math.max(1, 2 * delimiterSize));
     }
 
     /**
@@ -105,40 +107,6 @@ final class ExtendedBufferedReader extends BufferedReader {
         return closed;
     }
 
-    /**
-     * Returns the next character in the current reader without consuming it. So the next call to {@link #read()} will
-     * still return this value. Does not affect line number or last character.
-     *
-     * @return the next character
-     *
-     * @throws IOException
-     *             If an I/O error occurs
-     */
-    int lookAhead() throws IOException {
-        super.mark(1);
-        final int c = super.read();
-        super.reset();
-
-        return c;
-    }
-
-    /**
-     * Returns the next n characters in the current reader without consuming them. The next call to {@link #read()} will still return the next value. This
-     * doesn't affect line number or last character.
-     *
-     * @param n the number characters look ahead.
-     * @return the next n characters.
-     * @throws IOException If an I/O error occurs
-     */
-    char[] lookAhead(final int n) throws IOException {
-        final char[] buf = new char[n];
-        super.mark(n);
-        super.read(buf, 0, n);
-        super.reset();
-
-        return buf;
-    }
-
     @Override
     public int read() throws IOException {
         final int current = super.read();
@@ -149,6 +117,21 @@ final class ExtendedBufferedReader extends BufferedReader {
         lastChar = current;
         position++;
         return lastChar;
+    }
+
+    public int peek() throws IOException {
+      final int current = super.read();
+      if (current != END_OF_STREAM) {
+          super.unread(current);
+      }
+      return current;
+    }
+
+    char[] peek(int n) throws IOException {
+      final char[] buf = new char[n];
+      super.read(buf);
+      super.unread(buf);
+      return buf;
     }
 
     @Override
@@ -194,18 +177,44 @@ final class ExtendedBufferedReader extends BufferedReader {
      *
      * @return the line that was read, or null if reached EOF.
      */
-    @Override
     public String readLine() throws IOException {
-        final String line = super.readLine();
+        StringBuilder sb = new StringBuilder(64);
+        final long startEolCounter = eolCounter;
 
-        if (line != null) {
-            lastChar = LF; // needed for detecting start of line
-            eolCounter++;
-        } else {
-            lastChar = END_OF_STREAM;
+        int c = this.read();
+        if (c == END_OF_STREAM) {
+          return null;
+        }
+        if (eolCounter != startEolCounter) {
+          if (c == CR && peek() == LF) {
+            this.read();
+          }
+          return "";
+        }
+        do {
+          sb.append((char)c);
+          c = this.read();
+        }
+        while (eolCounter == startEolCounter);
+
+        if (c == CR && peek() == LF) {
+          this.read();
         }
 
-        return line;
+        return sb.toString();
     }
+
+    static ExtendedBufferedReader create(Reader reader, int delimiterSize) {
+        return new ExtendedBufferedReader(reader, delimiterSize);
+    }
+
+
+    static ExtendedBufferedReader create(String string, int delimiterSize) {
+        return new ExtendedBufferedReader(new StringReader(string), delimiterSize);
+    }
+
+    static ExtendedBufferedReader create(String string) {
+      return new ExtendedBufferedReader(new StringReader(string), 0);
+  }
 
 }
